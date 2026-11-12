@@ -4,13 +4,85 @@
 
 # 麦麦绘图
 
-本仓库是 [WhiteCloudOL/maimai-drawpic-plugin](https://github.com/WhiteCloudOL/maimai-drawpic-plugin) 的人物参考图增强 fork，保留原插件 ID 和实例数据。新增功能说明见下方「人物参考图」。
-
 ![Plugin Version](https://img.shields.io/badge/Plugin-2.2.1-informational.svg) ![MaiBot](https://img.shields.io/badge/MaiBot-1.3.6%E2%80%931.4.99-blue.svg) ![MaiBot Plugin SDK](https://img.shields.io/badge/Plugin%20SDK-2.12.0%E2%80%932.22.1-blueviolet.svg) ![License](https://img.shields.io/badge/License-AGPL--3.0-green.svg)
 
 **❤️为 MaiBot 提供多平台聚合绘图能力，内置现代化 WebUI 工作台与聊天指令支持❤️**
 
 </div>
+
+本仓库是 [WhiteCloudOL/maimai-drawpic-plugin](https://github.com/WhiteCloudOL/maimai-drawpic-plugin) 的人物参考图增强 fork，保留原插件 ID `maimai-drawpic-plugin` 和实例数据。
+
+## 本 fork 的全部改动
+
+- **人物参考图设置**：新增「偏好与预设 → 人物参考图」，可上传、预览和移除同一人物的 1～3 张照片，每张不超过 6 MiB。图片上传、移除后立即保存；人物姓名、昵称和开关点击「保存全部设置」生效，切换分类保留草稿。
+- **本人出镜自动附图**：开启后，根据本次绘图描述识别自拍、本人穿搭和本人入镜的合照等，自动附带真实参考图并使用图生图。纯风景、食物、物品及明确的其他人物照保持原流程，不会强行加入本人。
+- **各入口共用**：AI 绘图工具、风格绘图、工作台及其他插件通过麦麦绘图提交的请求共用此逻辑，不依赖麦生活。工具说明同步提醒模型在绘图描述中明确人物身份。
+- **保持人物身份**：提示词约束脸型、五官、肤色、发色、瞳色、体貌与年龄感，服装、姿势、表情和场景按要求变化；合照只约束该人物。已有编辑源图继续保留，与参考图内容完全相同的图片去重，并保留调用方提供的原图 URL。
+- **提交前检查**：判定失败、缺少参考图、模型不支持图生图或源图数量超限时，在创建生图任务和扣绘图额度前拒绝，不静默改为无参考图生成。只接受公网源图 URL 的模型无法直接使用未托管的本地参考图。
+- **参考图长期保存**：图片保存在实例插件数据目录的 `persona_references/`，不受普通上传缓存的过期清理影响；开关等配置仍在 `workspace_settings.json`。上传和删除带修订号检查，避免多个页面互相覆盖。
+- **保留原有命令语义**：强制 `/绘图 文生图` 或 NAI 文生图遇到本人出镜会提示模式冲突，请改用普通绘图或风格绘图；强制图生图命令仍需附带或引用真实源图。相同 `request_id` 优先恢复原任务，不会因参考图更新而再次生成。
+- **配置与文档**：新增设置包含中、英、日、韩文案；配置版本提升至 `2.46.0`，插件版本暂保留 `2.2.1`；仓库和更新来源改为本 fork。
+
+**启用方法**：打开「偏好与预设 → 人物参考图」，上传照片，填写人物姓名及常用昵称，开启自动使用并保存。姓名留空沿用 MaiBot 的机器人昵称。所选生图模型须支持图生图及全部参考图数量。
+
+人物判定默认使用 MaiBot 的 `utils` 模型任务，每次新绘图调用一次，也可选择 `replyer`、`planner` 或 `vlm`；判断读取原始绘图描述，避免风格模板里的“同一人物”等文字误触发。请在描述中明确人物姓名或“机器人本人”。语义判断依赖模型，参考图也不能保证每次生成的脸完全一致。
+
+## 在线安装与切换来源
+
+本 fork 尚未加入官方插件市场，市场中原版「麦麦绘图」的安装、更新按钮不能当作本 fork 的入口。核对 MaiBot 1.4.3 当前实现，插件页面提供市场安装和 ZIP 安装，没有任意填写 GitHub 仓库地址的安装框；ZIP 安装同 ID 插件时要求先卸载。
+
+### 已装原版，切换为本 fork（保留现有目录）
+
+先在 MaiBot 页面停止对应机器人，备份现有插件目录与实例的插件数据目录，再进入 1Panel 的 MaiBot **容器终端**。以下命令均在现有 `maimai-drawpic-plugin` 插件目录内执行。
+
+先确认目录是 Git 仓库且没有本地代码修改：
+
+```bash
+git status --short
+```
+
+没有输出时继续；有修改或提示不是 Git 仓库时先停止，不执行强制重置。Git 安装可直接切换来源并快进更新，无需卸载：
+
+```bash
+git remote set-url origin https://github.com/Kanawooo/maimai-drawpic-plugin.git
+git pull --ff-only origin main
+```
+
+完成后重新启动机器人或重载插件，打开「偏好与预设」确认出现「人物参考图」。两者插件 ID 相同，继续使用原来的实例数据目录；代理、插件开关所在的 `config.toml` 也保留在现有目录中。首次切换版本号仍可能显示 `2.2.1`，以新增页面和实际提交为准。
+
+若原安装没有 `.git`，不要直接删除旧目录。可先备份，再通过 ZIP 安装切换：下载 [本 fork 的 main 源码 ZIP](https://github.com/Kanawooo/maimai-drawpic-plugin/archive/refs/heads/main.zip)，卸载旧插件后在插件页面的「ZIP 安装」上传，恢复原 `config.toml`，重新加载。保留实例数据目录中的平台配置、风格、额度与参考图。源码 ZIP 不含 `.git`，之后不能直接运行 `git pull`；继续从本 fork 获取 ZIP 更新，或切换为 Git 安装。
+
+### 尚未安装
+
+在 MaiBot 实例的 `plugins` 目录内执行，让服务器直接从 GitHub 下载：
+
+```bash
+git clone --branch main https://github.com/Kanawooo/maimai-drawpic-plugin.git
+```
+
+然后重新加载插件。仅使用网页时，也可下载上面的 ZIP，通过「ZIP 安装」上传。
+
+## 同步上游并保留人物参考图
+
+后续更新分两步：**先合并到你的 GitHub fork，再让机器人更新这个 fork**。参考图功能作为独立提交保留在本仓库的 `main` 中；正常合并上游会保留这些提交，若修改冲突则需处理后再继续。
+
+1. 打开 [Kanawooo/maimai-drawpic-plugin](https://github.com/Kanawooo/maimai-drawpic-plugin)，选择 `main`。
+2. 上游有更新时点击 **Sync fork → Update branch**。有冲突时停止自动同步，通过 PR 解决冲突，保留人物参考图相关逻辑后再合并。不要选择丢弃本 fork 提交的 **Discard commits** 或强制覆盖。
+3. 合并后停止对应机器人，在服务器插件目录执行：
+
+   ```bash
+   git pull --ff-only origin main
+   ```
+
+4. 重新加载插件，核对参考图设置仍在。参考图和配置属于实例数据，不需要重新上传；合并代码仍需检查人物判断、自动附图和设置页面是否正常。
+
+也可以在装有 GitHub CLI 的电脑上执行 `gh repo sync Kanawooo/maimai-drawpic-plugin --branch main`，不添加 `--force`；发生冲突时会停止。[GitHub 官方同步说明](https://docs.github.com/en/pull-requests/how-tos/work-with-forks/syncing-a-fork)
+
+服务器的 `origin` 应一直指向本 fork。MaiBot 市场详情优先使用市场元数据，可能仍指向原作者仓库；更新本 fork 时使用上述 Git 命令，不从原版市场卡片更新或重装。
+
+---
+
+## 原插件功能
 
 - **双端交互支持**：支持聊天指令与可视化 WebUI 双向操作，自由输入提示词、上传参考图并切换画风预设
 - **多平台灵活管理**：支持多平台及同平台多实例配置，密钥、地址、参数完全独立，支持首选模型与按序备用切换
@@ -21,7 +93,7 @@
 ## 🩷 问题反馈&功能建议
 | 方式 | 联系 |
 | :--: | :--: |
-| Github Issue | [跳转](https://github.com/WhiteCloudOL/maimai-drawpic-plugin/issues) |
+| 本 fork 的 Github Issue | [跳转](https://github.com/Kanawooo/maimai-drawpic-plugin/issues) |
 | QQ群 | [637174573](https://qm.qq.com/q/3f2bdkDsyW) |
 
 
@@ -39,26 +111,8 @@
 ---
 
 ## ⚡ 快速导航
-[安装说明](#-安装) · [快速上手](#-快速上手) · [支持平台](#-支持平台) · [聊天命令](#-聊天命令) · [配置与特性](#-配置与高级特性) · [常见问题](#-常见问题)
+[安装说明](#在线安装与切换来源) · [保留功能同步上游](#同步上游并保留人物参考图) · [快速上手](#-快速上手) · [支持平台](#-支持平台) · [聊天命令](#-聊天命令) · [配置与特性](#-配置与高级特性) · [常见问题](#-常见问题)
 
-
----
-
-## 📦 安装
-
-> [!TIP]
-> 无论哪种方式，升级旧版本前均建议先备份原插件目录与数据配置。详见 [升级与恢复指南](docs/configuration.md#升级迁移与冲突恢复)
-
-### 方式一：源码安装
-在 MaiBot 根目录下执行：
-```bash
-cd plugins
-git clone https://github.com/WhiteCloudOL/maimai-drawpic-plugin.git
-```
-完成后重启 MaiBot 或重载插件，在 WebUI 扩展页面打开 **麦麦绘图** 即可。
-
-### 方式二：插件市场安装(⭐推荐)
-在 MaiBot 插件市场中直接搜索并安装，安装后可在插件管理中直接查看版本与更新。
 
 ---
 
@@ -117,12 +171,6 @@ git clone https://github.com/WhiteCloudOL/maimai-drawpic-plugin.git
 ## ⚙️ 配置与高级特性
 
 WebUI 偏好设置采用标签页分类，右下角统一保存修改，修改项支持单击撤回图标快速重置。
-
-**本分支新增人物参考图**：在「偏好与预设 → 人物参考图」上传同一人物的 1～3 张照片，填写人物姓名与昵称并开启自动使用，点击「保存全部设置」。单张不超过 6 MiB；参考图长期保存在实例数据目录，不受普通上传缓存的过期清理影响，上传和移除立即保存。
-
-开启后，每次新绘图先用 MaiBot 的判定模型（默认 `utils`）识别本次描述是否包含该人物。自拍、本人穿搭、本人入镜的合照等会自动附带真实参考图并使用图生图；纯风景、物品和明确的其他人物照保持原流程。AI 工具、风格绘图、工作台及插件联动共用此行为。请让绘图描述明确写出人物姓名或“机器人本人”，不要只写不明主体的“来一张”。语义判断仍依赖模型，参考图能约束身份但不保证生成结果完全一致。
-
-所选模型必须支持图生图及全部参考图数量；只接受公网源图 URL 的模型不能使用本地人物参考图。判定失败、缺图或能力不足时在创建任务和扣额度前拒绝，不静默改为无参考图生成。原始源图仍保留；与人物参考图内容完全相同的源图会去重。强制 `/绘图 文生图` 或 NAI 文生图遇到本人出镜会提示模式冲突；改用普通绘图或风格绘图。强制图生图命令仍需附带或引用真实源图。
 
 - **模型与预设覆盖**：支持按模型覆盖分辨率、OpenAI 兼容接口模式，并配置平台扩展参数；支持常用尺寸下拉与自定义宽高
 - **风格模板**：模板中 `{prompt}` 与 `{negative_prompt}` 为占位符，支持一键注入固定画风，未指定风格时自动继承默认预设
