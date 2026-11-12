@@ -64,13 +64,7 @@ class RequestMixin:
             normalized_source_urls = source_image_urls or [""] * len(normalized_source_images)
             if len(normalized_source_urls) != len(normalized_source_images):
                 raise ValueError("源图 URL 数量必须与源图数量一致")
-            persona = getattr(self, "_persona_reference_service", None)
-            if persona is not None and not persona_prepared:
-                prompt, normalized_source_images, normalized_source_urls = await persona.prepare(
-                    prompt, normalized_source_images, normalized_source_urls, subject_prompt=persona_subject_prompt,
-                )
-            if forced_text_only and normalized_source_images:
-                raise ValueError("本人出镜需要人物参考图，不能强制文生图。请改用普通绘图或 /绘图 风格 <风格名> <描述>，自动使用图生图")
+            raw_subject_prompt = prompt if persona_subject_prompt is None else persona_subject_prompt
             # 风格入口已解析的模板（含显式无风格的空串）直接沿用，普通入口只套用一次默认风格。
             if style_negative_prompt_template is None:
                 resolved_style = self._require_style_prompt_resolver().resolve(
@@ -78,6 +72,14 @@ class RequestMixin:
                 )
                 prompt = resolved_style.positive_prompt
                 style_negative_prompt_template = resolved_style.negative_prompt_template
+            persona = getattr(self, "_persona_reference_service", None)
+            if persona is not None and not persona_prepared:
+                prompt, normalized_source_images, normalized_source_urls = await persona.prepare(
+                    prompt, normalized_source_images, normalized_source_urls, subject_prompt=raw_subject_prompt,
+                    scope_key=resolved_stream_id,
+                )
+            if forced_text_only and normalized_source_images:
+                raise ValueError("本人出镜需要人物参考图，不能强制文生图。请改用普通绘图或 /绘图 风格 <风格名> <描述>，自动使用图生图")
             session_preference = self._get_session_preference(
                 resolved_stream_id,
                 resolved_user_id,

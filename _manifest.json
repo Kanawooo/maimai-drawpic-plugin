@@ -35,6 +35,7 @@
     "send.image",
     "llm.generate",
     "config.get",
+    "api.call",
     "chat.get_all_streams",
     "chat.get_group_streams",
     "chat.get_private_streams",

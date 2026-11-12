@@ -79,8 +79,8 @@ class GeneralConfig(PluginConfigBase):
     )
     persona_reference_model: Literal["utils", "replyer", "planner", "vlm"] = Field(
         default="utils",
-        description="判断本次绘图是否包含本人的宿主模型任务",
-        json_schema_extra={"label": "人物出镜判定模型", "hint": "沿用 MaiBot 对应任务的模型配置，每次新绘图调用一次；默认 utils，不会修改生图模型。"},
+        description="判断人物出镜并规划具体动作、表情和镜头的宿主模型任务",
+        json_schema_extra={"label": "人物与画面规划模型", "hint": "人物判定和画面规划合并为一次调用，默认 utils；读取麦生活当前背景，用户明确要求优先，不改变生图模型。"},
     )
 
     integration_api_enabled: bool = Field(

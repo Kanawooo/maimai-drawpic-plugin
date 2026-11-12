@@ -10,6 +10,10 @@
 
 人物参考图分支：管理员开启自动参考图后，联动提交也会根据原始 `prompt` 识别本人出镜，自动附带持久参考图。`task_type="draw"` 的文字请求可能实际成为 `edit_image`，以任务返回的类型为准；调用方无需传参考图路径或重复编码。`prompt` 应明确人物身份，未提供的身份不会从聊天记录中猜测。判定失败/不明确、本人出镜却缺图分别返回 `PERSONA_CHECK_FAILED` / `PERSONA_UNCERTAIN` / `PERSONA_REFERENCE_MISSING`，均未受理且不创建任务；请修正描述或设置，不自动重提。模型必须支持图生图、本地源图和合并后的数量。相同 `request_id` 仍优先恢复原任务，不因参考图更新而重新生成。
 
+`drawpic_models` 的 `features.persona_scene_context=true` 表示 v2 提交支持可选 `persona_scene_context` 对象。仅允许字符串字段 `activity`（≤600 字）、`location`（≤160 字）、`weather`（≤160 字）、`mood`（≤40 字），及 `source_role`（`edit` 或 `identity`，默认 `edit`）。该对象参与请求签名；同一请求键重查不会重读场景或重新规划。`identity` 明确声明传入图片只是身份图：自动参考图开启时，统一采用绘图插件配置的人物参考图；普通编辑源图不作此替换。自动附图关闭时仍保留调用方显式场景和图片。
+
+没有显式场景时，只通过同实例 `maibot-community.mai-life.get_photo_context` v1 读取活动、地点、缓存天气和心情；此接口由 [麦生活场景 fork](https://github.com/Kanawooo/Mai_life) 提供。接口缺失时记录告警并沿用原描述，不编造天气或心情。麦生活直发会携带场景，绘图不回调它，避免循环；双方仍只提交一个生成任务。画面规划与人物判定合并为一次调用；输出无效时返回 `PERSONA_CHECK_FAILED` 或 `PERSONA_PLAN_FAILED`，未创建任务或扣绘图额度。新人物约束追加在风格模板之后，明确身份图不是编辑底图。最近两次方案按会话隔离，只在内存保留，不代表已生成照片，重载后清空。
+
 管理员可在 **偏好与预设 → 通用配置** 关闭默认开启的 `general.integration_api_enabled`，此时所有公开 v1 API 返回权限错误，v2 API 返回不可重试的 `PERMISSION_DENIED`；提交接口的 `accepted` 为 `false`，不创建任务。重新开启后可继续查询原任务，请勿据此自动重新生成。
 
 仍在等待受理的提交会在创建任务前复查联动开关和会话名单；等待期间权限被撤销时返回 `PERMISSION_DENIED`，已预留的额度退回。已受理任务继续执行，不因关闭开关而重新生成或自动取消。

@@ -1,6 +1,7 @@
 """Persistent character references and admission checks; no real LLM, provider or chat sends."""
 
 import asyncio
+import base64
 from io import BytesIO
 import json
 from types import SimpleNamespace
@@ -17,6 +18,10 @@ PersonaReferenceService = module("application.persona").PersonaReferenceService
 TaskRequestError = module("domain.task_errors").TaskRequestError
 
 
+def plan_response(subject="SELF", shot="侧身坐在桌边，手扶杯子，视线自然移向窗外，侧前方拍摄"):
+    return {"success": True, "response": json.dumps({"subject": subject, "shot": shot if subject == "SELF" else ""}, ensure_ascii=False)}
+
+
 def picture(color):
     output = BytesIO()
     Image.new("RGB", (80, 100), color).save(output, "PNG")
@@ -28,7 +33,8 @@ def service(tmp_path, verdict="SELF", enabled=True, name="林悦 Yue"):
     config.general.persona_reference_enabled = enabled
     config.general.persona_reference_name = name
     ctx = SimpleNamespace(
-        llm=SimpleNamespace(generate=AsyncMock(return_value={"success": True, "response": verdict})),
+        llm=SimpleNamespace(generate=AsyncMock(return_value=plan_response(verdict if isinstance(verdict, str) else "SELF"))),
+        api=SimpleNamespace(call=AsyncMock(return_value={})),
         config=SimpleNamespace(get=AsyncMock(return_value="Yue")), logger=Mock(),
     )
     store = PersonaReferenceStore(tmp_path)
@@ -109,7 +115,7 @@ def test_detection_uses_subject_instead_of_style_and_resolves_bot_name(tmp_path)
         persona = service(tmp_path, "NONE", name="")
         await persona.prepare("style says selfie and same identity; lake", [], [], subject_prompt="a lake")
         message = persona.ctx.llm.generate.call_args.args[0][1]["content"]
-        assert json.loads(message) == {"character": "Yue", "drawing_request": "a lake"}
+        assert json.loads(message) == {"character": "Yue", "drawing_request": "a lake", "life_context": {}, "recent_shots": []}
         persona.ctx.config.get.assert_awaited_once_with("bot.nickname", "")
     asyncio.run(run())
 
@@ -157,7 +163,7 @@ def test_api_auto_edit_and_idempotency_skip_reclassification(make_plugin, monkey
             config.persona_reference_name = "Yue"
             persona = plugin._persona_reference_service
             persona.store.add(image_bytes(), 0)
-            detect = AsyncMock(return_value={"success": True, "response": "SELF"})
+            detect = AsyncMock(return_value=plan_response())
             monkeypatch.setattr(plugin.ctx.llm, "generate", detect)
             draw = plugin._require_draw_service()
             generated = []
@@ -188,7 +194,7 @@ def test_chat_rejections_precede_task_creation_and_quota(make_plugin, monkeypatc
         try:
             plugin.config.general.persona_reference_enabled = True
             plugin.config.general.persona_reference_name = "Yue"
-            monkeypatch.setattr(plugin.ctx.llm, "generate", AsyncMock(return_value={"success": True, "response": "SELF"}))
+            monkeypatch.setattr(plugin.ctx.llm, "generate", AsyncMock(return_value=plan_response()))
             if condition != "missing":
                 plugin._persona_reference_service.store.add(image_bytes(), 0)
             if condition == "unsupported":
@@ -230,4 +236,125 @@ def test_reference_management_api_uses_owned_sources_and_survives_reload(make_pl
             assert removed["images"] == []
         finally:
             await reloaded.on_unload()
+    asyncio.run(run())
+
+
+def test_live_scene_and_specific_shot_follow_raw_request_not_style(tmp_path):
+    async def run():
+        persona = service(tmp_path)
+        persona.store.add(image_bytes(), 0)
+        scene = {"activity": "改预算", "location": "办公室", "weather": "多云，19℃", "mood": "有些闷"}
+        persona.ctx.api.call.return_value = scene
+        persona.ctx.llm.generate.return_value = plan_response(shot="坐在海边看向海面，轻抬下巴，侧面近景")
+        prompt, images, _ = await persona.prepare("style says keep pose; Yue 在海边侧脸", [], [], subject_prompt="Yue 在海边侧脸")
+        persona.ctx.api.call.assert_awaited_once_with("maibot-community.mai-life.get_photo_context", version="1")
+        data = json.loads(persona.ctx.llm.generate.call_args.args[0][1]["content"])
+        assert data["drawing_request"] == "Yue 在海边侧脸" and data["life_context"] == scene
+        assert "用户已指定" in persona.ctx.llm.generate.call_args.args[0][0]["content"]
+        assert "海面" in prompt and "不是待编辑的底图" in prompt and len(images) == 1
+        assert all(value in prompt for value in scene.values())
+    asyncio.run(run())
+
+
+def test_life_direct_request_has_no_callback_and_uses_one_authoritative_reference_set(tmp_path):
+    async def run():
+        persona = service(tmp_path)
+        own, upstream = image_bytes(), picture("blue")
+        persona.store.add(own, 0)
+        persona.ctx.api.call.side_effect = AssertionError("must not call back into MaiLife")
+        scene = {"activity": "喝水", "location": "家里", "weather": "晴", "mood": "平静", "source_role": "identity"}
+        prompt, images, _ = await persona.prepare("Yue 此刻的生活照片", [upstream], [""], photo_context=scene)
+        assert images == [own] and "喝水" in prompt
+        assert "编辑源图，保留" not in prompt
+        persona.ctx.api.call.assert_not_awaited()
+        persona.ctx.llm.generate.assert_awaited_once()
+    asyncio.run(run())
+
+
+def test_life_snapshot_cannot_relabel_an_actual_user_edit_source(tmp_path):
+    async def run():
+        persona = service(tmp_path)
+        own, edit = image_bytes(), picture("blue")
+        persona.store.add(own, 0)
+        persona.ctx.api.call.return_value = {"activity": "休息", "source_role": "identity"}
+        prompt, images, urls = await persona.prepare("换掉 Yue 照片的背景", [edit], ["https://example.com/edit"])
+        assert images == [own, edit] and urls[-1] == "https://example.com/edit"
+        assert "其余输入图才是本次编辑源图" in prompt
+    asyncio.run(run())
+
+
+def test_disabled_auto_reference_still_preserves_explicit_caller_scene(tmp_path):
+    async def run():
+        persona = service(tmp_path, enabled=False)
+        source = picture("blue")
+        prompt, images, _ = await persona.prepare("Yue", [source], [""], photo_context={"weather": "雨", "source_role": "identity"})
+        assert "雨" in prompt and "不是待编辑的底图" in prompt and images == [source]
+        persona.ctx.api.call.assert_not_awaited()
+        persona.ctx.llm.generate.assert_not_awaited()
+    asyncio.run(run())
+
+
+def test_missing_life_plugin_does_not_fabricate_background_or_block_images(tmp_path):
+    async def run():
+        persona = service(tmp_path)
+        persona.store.add(image_bytes(), 0)
+        persona.ctx.api.call.side_effect = RuntimeError("API unavailable")
+        prompt, _, _ = await persona.prepare("Yue 在海边", [], [])
+        assert "当前生活背景" not in prompt
+        assert json.loads(persona.ctx.llm.generate.call_args.args[0][1]["content"])["life_context"] == {}
+        persona.ctx.logger.warning.assert_called_once()
+    asyncio.run(run())
+
+
+def test_recent_plans_are_bounded_and_isolated_by_conversation(tmp_path):
+    async def run():
+        persona = service(tmp_path)
+        persona.store.add(image_bytes(), 0)
+        for index in range(3):
+            persona.ctx.llm.generate.return_value = plan_response(shot=f"方案 {index}，侧前方拍摄")
+            await persona.prepare("Yue 自拍", [], [], scope_key="chat-a", photo_context={})
+        assert len(persona.recent_shots["chat-a"]) == 2
+        await persona.prepare("Yue 自拍", [], [], scope_key="chat-b", photo_context={})
+        assert json.loads(persona.ctx.llm.generate.call_args.args[0][1]["content"])["recent_shots"] == []
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("context", [{"diary": "private"}, {"weather": 10}, {"source_role": []}, {"activity": "x" * 601}])
+def test_supplied_scene_schema_rejects_invalid_or_private_fields(tmp_path, context):
+    async def run():
+        persona = service(tmp_path)
+        with pytest.raises(ValueError):
+            await persona.prepare("Yue 自拍", [], [], photo_context=context)
+        persona.ctx.llm.generate.assert_not_awaited()
+    asyncio.run(run())
+
+
+def test_scene_request_id_recovery_does_not_replan_or_submit_twice(make_plugin, monkeypatch):
+    async def run():
+        plugin = make_plugin()
+        await plugin.on_load()
+        try:
+            plugin.config.general.persona_reference_enabled = True
+            plugin.config.general.persona_reference_name = "Yue"
+            plugin._persona_reference_service.store.add(image_bytes(), 0)
+            detect = AsyncMock(return_value=plan_response())
+            monkeypatch.setattr(plugin.ctx.llm, "generate", detect)
+            monkeypatch.setattr(plugin.ctx.api, "call", AsyncMock(side_effect=AssertionError("no callback")))
+            draw = plugin._require_draw_service()
+            generate = AsyncMock(return_value=[image_bytes()])
+            monkeypatch.setattr(draw, "_run_image_request_attempt", generate)
+            scene = {"activity": "喝茶", "location": "公司", "weather": "晴", "mood": "平静", "source_role": "identity"}
+            source = base64.b64encode(picture("blue")).decode()
+            args = dict(prompt="Yue 的生活照", task_type="edit_image", source_images=[source], request_id="scene-request-1", persona_scene_context=scene)
+            first = await plugin.drawpic_submit_v2(**args)
+            await asyncio.gather(*draw.background_tasks)
+            again = await plugin.drawpic_submit_v2(**args)
+            assert first["accepted"] and again["reused"] and again["task_id"] == first["task_id"]
+            detect.assert_awaited_once()
+            generate.assert_awaited_once()
+            assert generate.call_args.kwargs["source_image_bytes_list"] == [image_bytes()]
+            changed = await plugin.drawpic_submit_v2(**{**args, "persona_scene_context": {**scene, "activity": "下班"}})
+            assert not changed["accepted"] and changed["error"]["code"] == "REQUEST_ID_CONFLICT"
+        finally:
+            await plugin.on_unload()
     asyncio.run(run())
