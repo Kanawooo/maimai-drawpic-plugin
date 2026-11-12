@@ -11,7 +11,7 @@ class IntegrationAPIMixin(WorkspaceAPIBase):
     @API("drawpic_models", version="1", public=True, description="查询可用图片模型与任务能力")
     @integration_api_endpoint
     async def drawpic_models(self) -> Dict[str, Any]:
-        return {**self._workspace().models(), "features": {"persona_scene_context": True}}
+        return self._workspace().models()
 
     @API("drawpic_submit", version="1", public=True, description="提交文生图或图生图，立即返回任务 ID")
     @integration_api_endpoint

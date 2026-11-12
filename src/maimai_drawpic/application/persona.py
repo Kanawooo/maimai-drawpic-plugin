@@ -11,7 +11,7 @@ from ..domain.task_errors import TaskRequestError
 from ..infrastructure.storage.persona import PersonaReferenceStore
 from ..infrastructure.storage.results import ImageResultStore
 from .moderation import DrawpicModerationService
-from .photo_context import read_life_photo_context, validate_photo_context
+from .photo_context import read_life_photo_context
 
 
 class PersonaReferenceService:
@@ -47,22 +47,12 @@ class PersonaReferenceService:
 
     async def prepare(
         self, prompt: str, images: list[bytes], urls: list[str], *, subject_prompt: str | None = None,
-        photo_context: dict[str, str] | None = None, scope_key: str = "workspace",
+        scope_key: str = "workspace",
     ) -> tuple[str, list[bytes], list[str]]:
         config = self.get_config().general
-        supplied_context = validate_photo_context(photo_context) if photo_context is not None else None
         if not config.persona_reference_enabled:
-            # 关闭自动附图不丢弃调用方显式提供的背景，也不读取本地人物图或调用模型。
-            if supplied_context is None:
-                return prompt, images, urls
-            note = self._scene_note({k: v for k, v in supplied_context.items() if k != "source_role"})
-            if supplied_context.get("source_role") == "identity" and images:
-                note += self._identity_note(config.persona_reference_name.strip(), len(images), False)
-            return prompt + note, images, urls
-        # 麦生活直发显式携带快照时直接使用，不再反向调用麦生活，避免回调链。
-        context = supplied_context if supplied_context is not None else await read_life_photo_context(self.ctx)
-        identity_inputs = supplied_context is not None and supplied_context.get("source_role") == "identity"
-        scene = {key: value for key, value in context.items() if key != "source_role"}
+            return prompt, images, urls
+        scene = await read_life_photo_context(self.ctx)
         name = config.persona_reference_name.strip()
         instructions = (
             '判断绘图需求是否包含当前机器人角色本人，并为本人照片补充画面方案。只输出 JSON：'
@@ -124,8 +114,8 @@ class PersonaReferenceService:
             raise TaskRequestError("PERSONA_REFERENCE_MISSING", "本人出镜需要人物参考图，请先在偏好与预设中上传")
         digests = {sha256(raw).digest() for raw in references}
         existing_urls = {sha256(raw).digest(): url for raw, url in zip(images, urls) if url}
-        # 上游明确声明的身份图由本插件配置的参考图统一替代；普通编辑源图始终保留。
-        others = [] if identity_inputs else [(raw, url) for raw, url in zip(images, urls) if sha256(raw).digest() not in digests]
+        # 相同参考图按内容去重；实际编辑源图与原 URL 始终保留。
+        others = [(raw, url) for raw, url in zip(images, urls) if sha256(raw).digest() not in digests]
         combined = references + [raw for raw, _ in others]
         if len(combined) > 8 or sum(map(len, combined)) > 40 * 1024 * 1024:
             raise ValueError("人物参考图与源图合计超过 8 张或 40 MiB，请减少源图")

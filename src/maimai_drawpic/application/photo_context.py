@@ -1,41 +1,38 @@
-"""麦生活只读照片背景；不生成日程，也不触发主动分享或绘图。"""
+"""只读取官方麦生活公开的当前背景，不生成日程或触发分享。"""
 
-from typing import Any
 import asyncio
-
-
-PHOTO_CONTEXT_LIMITS = {"activity": 600, "location": 160, "weather": 160, "mood": 40}
-
-
-def validate_photo_context(value: Any) -> dict[str, str]:
-    if not isinstance(value, dict) or value.keys() - {*PHOTO_CONTEXT_LIMITS, "source_role"}:
-        raise ValueError("照片场景只能包含 activity、location、weather、mood 和 source_role")
-    result = {}
-    for key, limit in PHOTO_CONTEXT_LIMITS.items():
-        text = value.get(key, "")
-        if not isinstance(text, str) or len(text) > limit or "\x00" in text:
-            raise ValueError(f"照片场景 {key} 必须为不超过 {limit} 字的文本")
-        if text.strip():
-            result[key] = " ".join(text.split())
-    role = value.get("source_role", "edit")
-    if not isinstance(role, str) or role not in {"identity", "edit"}:
-        raise ValueError("source_role 只能是 identity 或 edit")
-    if "source_role" in value:
-        result["source_role"] = role
-    return result
+import math
+from typing import Any
 
 
 async def read_life_photo_context(ctx: Any) -> dict[str, str]:
-    """只调用同实例的公开快照 API；缺失时保留原描述，不编造背景。"""
-    try:
-        async with asyncio.timeout(3):
-            value = await ctx.api.call("maibot-community.mai-life.get_photo_context", version="1")
-        context = validate_photo_context(value)
-        # 快照不能改变当前请求中用户源图的角色，只有调用方显式声明才可作为身份图。
-        context.pop("source_role", None)
-        return context
-    except asyncio.CancelledError:
-        raise
-    except Exception as exc:
-        ctx.logger.warning("麦生活照片场景不可用，本次保留原描述: error_type=%s", type(exc).__name__)
-        return {}
+    async def read(name: str) -> dict:
+        try:
+            async with asyncio.timeout(3):
+                value = await ctx.api.call("maibot-community.mai-life." + name, version="1")
+            if not isinstance(value, dict):
+                raise ValueError("Invalid life snapshot")
+            return value
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            ctx.logger.warning("麦生活照片背景读取失败: api=%s error_type=%s", name, type(exc).__name__)
+            return {}
+
+    state, scene = await asyncio.gather(read("get_life_state"), read("get_current_scene"))
+    current = scene.get("current")
+    current = current if isinstance(current, dict) else {}
+    result = {}
+    for key, value, limit in [
+        ("activity", state.get("current_activity") or current.get("summary"), 600),
+        ("location", state.get("current_location") or current.get("location"), 160),
+    ]:
+        if isinstance(value, str) and value.strip():
+            result[key] = " ".join(value.replace("\x00", "").split())[:limit]
+    mood = state.get("mood_valence")
+    if type(mood) in (int, float) and math.isfinite(mood) and -1 <= mood <= 1:
+        # 与官方麦生活概览相同的效价值档位，仅传画面需要的心情。
+        result["mood"] = ("低落" if mood <= -0.5 else "有些闷" if mood <= -0.15 else
+                          "平静" if mood < 0.25 else "不错" if mood < 0.6 else "很好")
+    # 官方公开接口不返回天气；保留原绘图描述中的天气，不读取私有数据或另查一份。
+    return result

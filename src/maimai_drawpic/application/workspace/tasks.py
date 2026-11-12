@@ -19,7 +19,6 @@ from ...domain.task_errors import TaskRequestError, task_error
 from ..drawing.admission import update_task_owned
 from ..access import access_restricted, require_chat_access, require_integration_api
 from .preferences import validate_preferences
-from ..photo_context import validate_photo_context
 
 
 def validate_task_id(task_id: str) -> None:
@@ -144,7 +143,6 @@ class WorkspaceTaskService:
         novelai_mode: str = "",
         novelai_artist_tags: str | None = None,
         require_existing_stream: bool = False,
-        persona_scene_context: Dict[str, str] | None = None,
     ) -> Dict[str, Any]:
         if origin == "plugin":
             require_integration_api(self.get_config().general, self.ctx.logger, "submit")
@@ -179,14 +177,10 @@ class WorkspaceTaskService:
         if novelai_artist_tags is not None:
             options["novelai_artist_tags"] = novelai_artist_tags
         options = validate_preferences(options)
-        if persona_scene_context is not None:
-            persona_scene_context = validate_photo_context(persona_scene_context)
         signature_values = [prompt, model, negative_prompt, style, task_type, stream_id, source_ids, source_images]
         # 保留旧请求的签名；只有显式覆盖新参数时才扩展签名，不能让升级破坏幂等恢复。
         if any(options.values()) or novelai_artist_tags is not None:
             signature_values.append(options)
-        if persona_scene_context is not None:
-            signature_values.append({"persona_scene_context": persona_scene_context})
         signature = await asyncio.to_thread(
             lambda: sha256(
                 json.dumps(
@@ -231,7 +225,7 @@ class WorkspaceTaskService:
             prompt = resolved_style.positive_prompt
             if self.persona is not None:
                 prompt, images, _ = await self.persona.prepare(
-                    prompt, images, [""] * len(images), subject_prompt=subject_prompt, photo_context=persona_scene_context,
+                    prompt, images, [""] * len(images), subject_prompt=subject_prompt,
                     scope_key=stream_id or "workspace",
                 )
                 # draw means a text request here; character references may turn it
