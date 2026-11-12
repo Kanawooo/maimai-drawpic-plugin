@@ -255,6 +255,7 @@ class NovelAICommandMixin:
                 raise ValueError("NAI 文生图提示词不能为空")
             result = await self._start_background_image_request(
                 defer_prompt_review=True,
+                forced_text_only=forced_task_type == "draw",
                 prompt=positive_prompt,
                 request_negative_prompt=negative_prompt,
                 requested_model=model,

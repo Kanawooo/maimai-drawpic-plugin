@@ -2,7 +2,7 @@
 
 from maibot_sdk import Field, PluginConfigBase
 from pydantic import field_validator
-from typing import List
+from typing import List, Literal
 
 from .types import AccessListMode, CommandReplyMode, ProxyScheme, QuotaPeriodMode, ReviewModelTask
 
@@ -22,7 +22,7 @@ class PluginSectionConfig(PluginConfigBase):
         },
     )
     config_version: str = Field(
-        default="2.45.0",
+        default="2.46.0",
         description="配置版本",
         json_schema_extra={
             "hint": "配置版本",
@@ -66,6 +66,22 @@ class GeneralConfig(PluginConfigBase):
 
     __ui_label__ = "通用配置"
     __ui_order__ = 1
+
+    persona_reference_enabled: bool = Field(
+        default=False,
+        description="本人出镜时自动附带人物参考图，使用图生图",
+        json_schema_extra={"label": "自动使用人物参考图", "hint": "开启后按绘图内容判断本人是否出镜；判定失败或缺少参考图时停止提交，不降级为无参考图生成。"},
+    )
+    persona_reference_name: str = Field(
+        default="", max_length=100,
+        description="参考图对应的角色姓名和常用称呼",
+        json_schema_extra={"label": "人物姓名与称呼", "hint": "可填写姓名及昵称；留空使用 MaiBot 的机器人昵称。只约束该人物，其他人物及纯风景物品图不附图。"},
+    )
+    persona_reference_model: Literal["utils", "replyer", "planner", "vlm"] = Field(
+        default="utils",
+        description="判断本次绘图是否包含本人的宿主模型任务",
+        json_schema_extra={"label": "人物出镜判定模型", "hint": "沿用 MaiBot 对应任务的模型配置，每次新绘图调用一次；默认 utils，不会修改生图模型。"},
+    )
 
     integration_api_enabled: bool = Field(
         default=True,

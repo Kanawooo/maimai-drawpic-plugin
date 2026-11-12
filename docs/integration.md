@@ -8,6 +8,8 @@
 
 插件 ID：`maimai-drawpic-plugin`。调用由当前 Host 经 SDK 转发，不增加 HTTP 服务、独立令牌或跨实例客户端。仅供同实例的可信插件使用。
 
+人物参考图分支：管理员开启自动参考图后，联动提交也会根据原始 `prompt` 识别本人出镜，自动附带持久参考图。`task_type="draw"` 的文字请求可能实际成为 `edit_image`，以任务返回的类型为准；调用方无需传参考图路径或重复编码。`prompt` 应明确人物身份，未提供的身份不会从聊天记录中猜测。判定失败/不明确、本人出镜却缺图分别返回 `PERSONA_CHECK_FAILED` / `PERSONA_UNCERTAIN` / `PERSONA_REFERENCE_MISSING`，均未受理且不创建任务；请修正描述或设置，不自动重提。模型必须支持图生图、本地源图和合并后的数量。相同 `request_id` 仍优先恢复原任务，不因参考图更新而重新生成。
+
 管理员可在 **偏好与预设 → 通用配置** 关闭默认开启的 `general.integration_api_enabled`，此时所有公开 v1 API 返回权限错误，v2 API 返回不可重试的 `PERMISSION_DENIED`；提交接口的 `accepted` 为 `false`，不创建任务。重新开启后可继续查询原任务，请勿据此自动重新生成。
 
 仍在等待受理的提交会在创建任务前复查联动开关和会话名单；等待期间权限被撤销时返回 `PERMISSION_DENIED`，已预留的额度退回。已受理任务继续执行，不因关闭开关而重新生成或自动取消。

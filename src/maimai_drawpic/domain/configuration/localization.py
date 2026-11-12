@@ -124,6 +124,9 @@ _SECTION_TEXTS: Dict[str, Tuple[Tuple[str, str, str], Tuple[str, str, str]]] = {
 }
 
 _FIELD_LABELS: Dict[str, Tuple[str, str, str]] = {
+    "persona_reference_enabled": ("Use Character References Automatically", "人物参照画像を自動使用", "인물 참조 이미지 자동 사용"),
+    "persona_reference_name": ("Character Name and Nicknames", "人物名と愛称", "인물 이름과 별명"),
+    "persona_reference_model": ("Character Detection Model", "本人登場判定モデル", "본인 등장 판정 모델"),
     "integration_api_enabled": ("Plugin Integration API", "プラグイン連携 API", "플러그인 연동 API"),
     "group_access_mode": ("Group List Mode", "グループ一覧モード", "그룹 목록 모드"),
     "group_access_ids": ("Group Access List", "グループアクセス一覧", "그룹 접근 목록"),
@@ -476,6 +479,21 @@ _OPENAI_MODE_HINTS = (
 
 
 _FIELD_HINT_OVERRIDES: Dict[str, Tuple[str, str, str]] = {
+    "GeneralConfig.persona_reference_enabled": (
+        "Detect character appearances from the drawing request. Stop before submission if detection fails or references are missing; never generate without required references.",
+        "描画内容から本人の登場を判定。判定失敗や参照画像不足の場合は送信を停止し、参照なしで生成しません。",
+        "그림 요청에서 본인 등장을 판정합니다. 판정 실패 또는 참조 이미지 누락 시 제출을 중단합니다.",
+    ),
+    "GeneralConfig.persona_reference_name": (
+        "Enter the character's name and nicknames; leave blank to use the MaiBot nickname. Other characters, landscapes and objects are unaffected.",
+        "名前と愛称を入力。空欄の場合は MaiBot のニックネームを使用。他の人物や風景・物品には適用しません。",
+        "이름과 별명을 입력합니다. 비워 두면 MaiBot 별명을 사용하며 다른 인물과 풍경 및 사물에는 적용하지 않습니다.",
+    ),
+    "GeneralConfig.persona_reference_model": (
+        "Use the corresponding MaiBot task model once per new drawing request. Defaults to utils; the image generation model is unchanged.",
+        "新しい描画ごとに対応する MaiBot タスクのモデルを一度使用。既定は utils。画像生成モデルは変更しません。",
+        "새 그림 요청마다 해당 MaiBot 작업 모델을 한 번 호출합니다. 기본값은 utils이며 이미지 생성 모델은 변경하지 않습니다.",
+    ),
     "MiniMaxModelConfig.enabled": ("Enabled. See the MiniMax model-specific limits in the platform guide.", "有効。モデルごとの制約はプラットフォームガイドを参照してください。", "활성화. 모델별 제한은 플랫폼 가이드를 참조하세요."),
     "MiniMaxModelConfig.api_key": ("API Key. See the MiniMax model-specific limits in the platform guide.", "API キー。モデルごとの制約はプラットフォームガイドを参照してください。", "API 키. 모델별 제한은 플랫폼 가이드를 참조하세요."),
     "MiniMaxModelConfig.base_url": ("API Base URL. See the MiniMax model-specific limits in the platform guide.", "API 基本 URL。モデルごとの制約はプラットフォームガイドを参照してください。", "API 기본 URL. 모델별 제한은 플랫폼 가이드를 참조하세요."),

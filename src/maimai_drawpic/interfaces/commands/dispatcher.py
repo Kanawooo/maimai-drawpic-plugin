@@ -365,6 +365,7 @@ class CommandMixin:
 
                 start_result = await self._start_background_image_request(
                     defer_prompt_review=True,
+                    forced_text_only=True,
                     prompt=prompt,
                     request_negative_prompt=negative_prompt,
                     stream_id=normalized_stream_id,

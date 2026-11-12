@@ -4,6 +4,8 @@
 
 # 麦麦绘图
 
+本仓库是 [WhiteCloudOL/maimai-drawpic-plugin](https://github.com/WhiteCloudOL/maimai-drawpic-plugin) 的人物参考图增强 fork，保留原插件 ID 和实例数据。新增功能说明见下方「人物参考图」。
+
 ![Plugin Version](https://img.shields.io/badge/Plugin-2.2.1-informational.svg) ![MaiBot](https://img.shields.io/badge/MaiBot-1.3.6%E2%80%931.4.99-blue.svg) ![MaiBot Plugin SDK](https://img.shields.io/badge/Plugin%20SDK-2.12.0%E2%80%932.22.1-blueviolet.svg) ![License](https://img.shields.io/badge/License-AGPL--3.0-green.svg)
 
 **❤️为 MaiBot 提供多平台聚合绘图能力，内置现代化 WebUI 工作台与聊天指令支持❤️**
@@ -115,6 +117,12 @@ git clone https://github.com/WhiteCloudOL/maimai-drawpic-plugin.git
 ## ⚙️ 配置与高级特性
 
 WebUI 偏好设置采用标签页分类，右下角统一保存修改，修改项支持单击撤回图标快速重置。
+
+**本分支新增人物参考图**：在「偏好与预设 → 人物参考图」上传同一人物的 1～3 张照片，填写人物姓名与昵称并开启自动使用，点击「保存全部设置」。单张不超过 6 MiB；参考图长期保存在实例数据目录，不受普通上传缓存的过期清理影响，上传和移除立即保存。
+
+开启后，每次新绘图先用 MaiBot 的判定模型（默认 `utils`）识别本次描述是否包含该人物。自拍、本人穿搭、本人入镜的合照等会自动附带真实参考图并使用图生图；纯风景、物品和明确的其他人物照保持原流程。AI 工具、风格绘图、工作台及插件联动共用此行为。请让绘图描述明确写出人物姓名或“机器人本人”，不要只写不明主体的“来一张”。语义判断仍依赖模型，参考图能约束身份但不保证生成结果完全一致。
+
+所选模型必须支持图生图及全部参考图数量；只接受公网源图 URL 的模型不能使用本地人物参考图。判定失败、缺图或能力不足时在创建任务和扣额度前拒绝，不静默改为无参考图生成。原始源图仍保留；与人物参考图内容完全相同的源图会去重。强制 `/绘图 文生图` 或 NAI 文生图遇到本人出镜会提示模式冲突；改用普通绘图或风格绘图。强制图生图命令仍需附带或引用真实源图。
 
 - **模型与预设覆盖**：支持按模型覆盖分辨率、OpenAI 兼容接口模式，并配置平台扩展参数；支持常用尺寸下拉与自定义宽高
 - **风格模板**：模板中 `{prompt}` 与 `{negative_prompt}` 为占位符，支持一键注入固定画风，未指定风格时自动继承默认预设

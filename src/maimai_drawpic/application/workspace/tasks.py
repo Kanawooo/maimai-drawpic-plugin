@@ -40,11 +40,13 @@ class WorkspaceTaskService:
         get_service: Callable,
         submit_chat: Callable,
         active_services: Callable,
+        persona: Any = None,
     ) -> None:
         self.ctx, self.data_dir = ctx, data_dir
         self.task_store, self.results = task_store, results
         self.get_config, self.get_service = get_config, get_service
         self.submit_chat, self.active_services = submit_chat, active_services
+        self.persona = persona
         self.lock = asyncio.Lock()
         self.metadata_path = data_dir / "workspace_tasks.json"
         self.metadata: Dict[str, Dict[str, Any]] = {}
@@ -216,6 +218,12 @@ class WorkspaceTaskService:
                 raise ValueError("文生图不能附带源图，请选择图生图")
             if task_type == "edit_image" and not images:
                 raise ValueError("图生图需要真实源图片")
+            subject_prompt = prompt
+            if self.persona is not None:
+                prompt, images, _ = await self.persona.prepare(prompt, images, [""] * len(images))
+                # draw means a text request here; character references may turn it
+                # into image editing. Forced chat commands retain their own semantics.
+                task_type = "edit_image" if images else "draw"
             service = self.get_service()
             router = service.router
             resolved_model = router.resolve_model_name(model, allow_unknown_model=False)
@@ -233,7 +241,7 @@ class WorkspaceTaskService:
                 "origin": origin,
                 "request_id": request_id or uuid4().hex,
                 "signature": signature,
-                "prompt": prompt,
+                "prompt": subject_prompt,
                 "style": style,
             }
             if origin == "plugin":
@@ -261,6 +269,7 @@ class WorkspaceTaskService:
                     notify_start=False,
                     defer_prompt_review=True,
                     submission=submission,
+                    persona_prepared=True,
                 )
             else:
                 result = await service.start_background_image_request(

@@ -14,9 +14,12 @@
 | --- | --- |
 | `data/plugins/maimai-drawpic-plugin/platforms.json` | 所有命名平台实例、连接信息、密钥与模型参数 |
 | `data/plugins/maimai-drawpic-plugin/workspace_settings.json` | 通用参数、管理员、额度规则、审核与风格模板 |
+| `data/plugins/maimai-drawpic-plugin/persona_references/` | 持久人物参考图与索引；通过工作台上传、移除，不手写图片路径 |
 | 插件目录内的 `config.toml` | 插件开关、代理、图片/日志/上传缓存容量 |
 
 插件文件夹改名不会改变上面以插件 ID 命名的数据目录。先正常加载插件一次，让它创建配置；编辑已有文件比从零手写完整结构更方便。
+
+人物参考图的开关位于 `workspace_settings.json` 的 `general`：`persona_reference_enabled` 默认 `false`，`persona_reference_name` 默认空串（沿用机器人昵称），`persona_reference_model` 默认 `utils`，可选 `utils`、`replyer`、`planner`、`vlm`。先在工作台上传参考图，再开启开关；图片不会写入 JSON/Base64 配置，也不保存在插件源码中。迁移实例时同时保留整个 `persona_references` 目录。
 
 任务、额度使用记录、迁移备份与临时图片是运行数据，不是平台配置入口。不要通过修改任务或额度记录来调整模型、平台参数。
 

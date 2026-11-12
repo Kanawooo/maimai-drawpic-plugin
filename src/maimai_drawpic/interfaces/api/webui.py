@@ -64,6 +64,16 @@ class WebUIAPIMixin(WorkspaceAPIBase):
     async def workspace_source(self, upload_id: str) -> Dict[str, Any]:
         return await self._workspace().tasks.claim_source(upload_id)
 
+    @API("workspace_persona_add", version="1")
+    @workspace_endpoint
+    async def workspace_persona_add(self, source_id: str, revision: int) -> Dict[str, Any]:
+        return await self._workspace().add_persona_reference(source_id, revision)
+
+    @API("workspace_persona_remove", version="1")
+    @workspace_endpoint
+    async def workspace_persona_remove(self, reference_id: str, revision: int) -> Dict[str, Any]:
+        return await self._workspace().remove_persona_reference(reference_id, revision)
+
     @API("workspace_submit", version="1")
     @workspace_endpoint
     async def workspace_submit(self, request_json: str) -> Dict[str, Any]:

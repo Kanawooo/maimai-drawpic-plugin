@@ -223,6 +223,23 @@
             }
           }
         },
+        "persona_add": {
+          "api": "workspace_persona_add",
+          "version": "1",
+          "parameters": {
+            "source_id": {"type": "string", "required": true, "max_length": 32},
+            "revision": {"type": "integer", "required": true, "minimum": 0, "maximum": 2147483647}
+          }
+        },
+        "persona_remove": {
+          "api": "workspace_persona_remove",
+          "version": "1",
+          "parameters": {
+            "reference_id": {"type": "string", "required": true, "max_length": 32},
+            "revision": {"type": "integer", "required": true, "minimum": 0, "maximum": 2147483647}
+          },
+          "confirmation": "移除这张人物参考图？后续新任务将不再使用它。"
+        },
         "submit": {
           "api": "workspace_submit",
           "version": "1",

@@ -12,6 +12,8 @@ from ...interfaces.chat.message_images import _evict_expired_source_image_cache,
 from ..drawing import DrawService
 from ...infrastructure.storage.platforms import WorkspaceConfigStore, host_config
 from ...infrastructure.storage.results import ImageResultStore
+from ...infrastructure.storage.persona import PersonaReferenceStore
+from ..persona import PersonaReferenceService
 
 
 def active_services(plugin: Any) -> List[DrawService]:
@@ -30,6 +32,9 @@ async def prepare_workspace(plugin: Any, config_path: Path) -> None:
     plugin._redactor.add(store.secrets())
     plugin._platform_store = store
     plugin._effective_config = await asyncio.to_thread(store.effective_config, raw)
+    plugin._persona_reference_service = PersonaReferenceService(
+        plugin.ctx, PersonaReferenceStore(plugin.ctx.paths.data_dir), lambda: plugin.config,
+    )
     plugin._result_store = ImageResultStore(
         plugin.ctx.paths.data_dir,
         runtime_dir=plugin.ctx.paths.runtime_dir,
@@ -96,6 +101,7 @@ async def attach_workspace(plugin: Any) -> None:
         get_service=plugin._require_draw_service,
         submit_chat=plugin._start_background_image_request,
         active_services=lambda: active_services(plugin),
+        persona=plugin._persona_reference_service,
     )
     try:
         await run_owned_thread(tasks.initialize)

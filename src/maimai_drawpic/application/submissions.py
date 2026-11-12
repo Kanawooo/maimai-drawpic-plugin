@@ -31,6 +31,9 @@ class RequestMixin:
         notify_start: bool = True,
         defer_prompt_review: bool = False,
         submission: Optional[Dict[str, Any]] = None,
+        persona_subject_prompt: str | None = None,
+        persona_prepared: bool = False,
+        forced_text_only: bool = False,
     ) -> dict[str, Any]:
         """按当前会话设置启动后台绘图，源图为空时文生图，存在源图时图生图。"""
 
@@ -61,6 +64,13 @@ class RequestMixin:
             normalized_source_urls = source_image_urls or [""] * len(normalized_source_images)
             if len(normalized_source_urls) != len(normalized_source_images):
                 raise ValueError("源图 URL 数量必须与源图数量一致")
+            persona = getattr(self, "_persona_reference_service", None)
+            if persona is not None and not persona_prepared:
+                prompt, normalized_source_images, normalized_source_urls = await persona.prepare(
+                    prompt, normalized_source_images, normalized_source_urls, subject_prompt=persona_subject_prompt,
+                )
+            if forced_text_only and normalized_source_images:
+                raise ValueError("本人出镜需要人物参考图，不能强制文生图。请改用普通绘图或 /绘图 风格 <风格名> <描述>，自动使用图生图")
             # 风格入口已解析的模板（含显式无风格的空串）直接沿用，普通入口只套用一次默认风格。
             if style_negative_prompt_template is None:
                 resolved_style = self._require_style_prompt_resolver().resolve(
@@ -118,6 +128,8 @@ class RequestMixin:
                 raise ValueError(f"{capability.reason}。请改用 /绘图 {task_hint} <prompt>，或切换到支持当前任务的模型")
 
             draw_service.router.validate_source_image_count(check_model, len(normalized_source_images))
+            if normalized_source_images and any(not url for url in normalized_source_urls):
+                draw_service.router.validate_local_source_images(check_model)
             if not defer_prompt_review:
                 await draw_service.review_prompt_or_raise(prompt)
             reservation_task = asyncio.create_task(asyncio.to_thread(

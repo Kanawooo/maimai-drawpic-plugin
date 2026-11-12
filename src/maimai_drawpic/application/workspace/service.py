@@ -130,6 +130,7 @@ class WorkspaceService:
         schema["sections"].pop("proxy", None)
         return _browser_integers({
             **snapshot,
+            "persona_references": await self.tasks.persona.snapshot() if self.tasks.persona else {"revision": 0, "images": []},
             "config_update_pending": self._transaction is not None,
             "runtime_refresh_pending": self.runtime_refresh_pending or self._transaction is not None,
             "settings": _mask_secrets(config),
@@ -152,6 +153,25 @@ class WorkspaceService:
             "presets": config["style"]["presets"],
             "proxy_password_set": bool(self.get_config().proxy.password),
         })
+
+    async def add_persona_reference(self, source_id: str, revision: int) -> Dict[str, Any]:
+        async def operation():
+            persona = self.tasks.persona
+            if persona is None:
+                raise ValueError("人物参考图服务不可用")
+            images = await self.tasks._sources([source_id], [])
+            await asyncio.to_thread(persona.store.add, images[0], revision)
+            return await persona.snapshot()
+        return await self._run_transaction(operation)
+
+    async def remove_persona_reference(self, reference_id: str, revision: int) -> Dict[str, Any]:
+        async def operation():
+            persona = self.tasks.persona
+            if persona is None:
+                raise ValueError("人物参考图服务不可用")
+            await asyncio.to_thread(persona.store.remove, reference_id, revision)
+            return await persona.snapshot()
+        return await self._run_transaction(operation)
 
     async def _refresh_committed(self, values: Dict[str, Any] | None = None) -> Dict[str, Any]:
         status = {"saved": True, "revision": self.store.revision, "recovery_pending": self.store.recovery_pending}

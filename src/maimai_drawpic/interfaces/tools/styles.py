@@ -55,7 +55,8 @@ class StyleToolMixin:
             "使用插件配置的全平台风格提示词模板执行文生图或图生图。"
             "有风格需求时必须先调用 draw_styles，依据 style_details.description 与用户需求做语义匹配，"
             "再把精确名称填入 style。"
-            "有真实源图片时自动图生图；没有源图片时文生图。style 不填时保持普通 draw/edit_image 行为。"
+            "有真实源图片时自动图生图；自拍或本人出镜需在 prompt 中明确写出本人或角色姓名，已开启人物参考图时自动附图。"
+            "无源图且无人物参考图时文生图。style 不填时保持普通 draw/edit_image 行为。"
         ),
         parameters=STYLED_DRAW_TOOL_PARAMETERS_SCHEMA,
     )
@@ -126,6 +127,7 @@ class StyleToolMixin:
             return await self._start_background_image_request(
                 defer_prompt_review=True,
                 prompt=resolved_prompt.positive_prompt,
+                persona_subject_prompt=prompt,
                 request_negative_prompt=negative_prompt,
                 style_negative_prompt_template=resolved_prompt.negative_prompt_template,
                 stream_id=runtime_context["stream_id"],

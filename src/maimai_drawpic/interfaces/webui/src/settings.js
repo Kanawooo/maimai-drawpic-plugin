@@ -1,13 +1,14 @@
 (() => {
   "use strict";
   const U = window.DrawpicUI,
-    { state, $, call, buttonAction, toast } = U;
-  const sections = { general: "通用配置", review: "审核配置", access: "黑白名单", style: "风格预设" };
-  const sourceSection = (name) => ["review", "access"].includes(name) ? "general" : name;
+    { state, $, e, icon, call, buttonAction, toast } = U;
+  const sections = { general: "通用配置", persona: "人物参考图", review: "审核配置", access: "黑白名单", style: "风格预设" };
+  const sourceSection = (name) => ["persona", "review", "access"].includes(name) ? "general" : name;
+  const personaField = (key) => /^persona_reference_/.test(key);
   const reviewField = (key) => /^(prompt|image)_review_/.test(key);
   const accessField = (key) => /^(group|private)_access_/.test(key);
   const belongsToSection = (name, key) => name === "style" ||
-    (name === "review" ? reviewField(key) : name === "access" ? accessField(key) : !reviewField(key) && !accessField(key));
+    (name === "persona" ? personaField(key) : name === "review" ? reviewField(key) : name === "access" ? accessField(key) : !reviewField(key) && !accessField(key) && !personaField(key));
   U.views.settings = async () => {
     let selected = Object.hasOwn(sections, state.settingsSection)
       ? state.settingsSection
@@ -28,6 +29,70 @@
         )}</div><section class="panel"><div class="panel-header"><div><h2 id="settings-heading"></h2><p class="hint" id="settings-description"></p></div><button type="button" id="reset-settings" class="button secondary compact">恢复当前分类默认</button></div><form id="settings-form"></form></section></div>`;
     const form = $("#settings-form");
     let requiresRefresh = false;
+    let referenceBusy = false;
+    function renderReferences(panel) {
+      const gallery = document.createElement("div");
+      gallery.className = "field full persona-gallery";
+      gallery.innerHTML = `<label>人物参考图</label><div class="source-list" data-persona-images></div><div><button type="button" class="button secondary compact" data-persona-upload>${icon("upload")}添加参考图</button><input type="file" accept="image/png,image/jpeg,image/webp" multiple hidden data-persona-file></div><p class="hint">最多 3 张，每张不超过 6 MiB。图片上传或移除后立即保存；开关和姓名点击“保存全部设置”生效。</p>`;
+      panel.append(gallery);
+      const upload = $("[data-persona-upload]", gallery);
+      const input = $("[data-persona-file]", gallery);
+      input.addEventListener("input", (event) => event.stopPropagation());
+      const images = $("[data-persona-images]", gallery);
+      const current = () => state.data.persona_references || { revision: 0, images: [] };
+      function paint() {
+        images.innerHTML = current().images.map((item, index) =>
+          `<div class="source-item"><img src="${e(item.preview)}" alt="人物参考图 ${index + 1}"><button type="button" class="icon-button" data-reference-id="${e(item.id)}" aria-label="移除人物参考图 ${index + 1}">${icon("close")}</button></div>`).join("");
+        upload.disabled = referenceBusy || current().images.length >= 3;
+        for (const button of images.querySelectorAll("[data-reference-id]")) {
+          button.disabled = referenceBusy;
+          button.onclick = () => change(async () => {
+            state.data.persona_references = await call("action", "persona_remove", {
+              reference_id: button.dataset.referenceId, revision: current().revision,
+            });
+            toast("参考图已移除");
+          });
+        }
+      }
+      async function change(operation) {
+        if (referenceBusy) return;
+        referenceBusy = true;
+        save.disabled = true;
+        $("#reset-settings").disabled = true;
+        paint();
+        try { await operation(); }
+        catch (error) { U.error(error); }
+        finally {
+          referenceBusy = false;
+          if (panel.isConnected) {
+            save.disabled = requiresRefresh;
+            $("#reset-settings").disabled = requiresRefresh;
+            upload.innerHTML = `${icon("upload")}添加参考图`;
+            paint();
+          }
+        }
+      }
+      upload.onclick = () => input.click();
+      input.onchange = () => {
+        const files = [...input.files];
+        input.value = "";
+        if (!files.length) return;
+        if (files.length + current().images.length > 3) return toast("最多保存 3 张人物参考图");
+        if (files.some((file) => file.size > 6 * 1024 * 1024)) return toast("每张人物参考图不能超过 6 MiB");
+        change(async () => {
+          for (const file of files) {
+            const source = await call("upload", "source", {}, file, {
+              onProgress: (percent) => { upload.textContent = `上传中 ${Math.round(percent)}%`; },
+            });
+            state.data.persona_references = await call("action", "persona_add", {
+              source_id: source.source_id, revision: current().revision,
+            });
+          }
+          toast("参考图已保存");
+        });
+      };
+      paint();
+    }
     function renderSection(name, values) {
       const panel = document.createElement("section");
       panel.id = `settings-panel-${name}`;
@@ -49,6 +114,7 @@
         const result = read();
         return Object.fromEntries(Object.keys(fields).map((key) => [key, result[key]]));
       };
+      if (name === "persona") renderReferences(panel);
     }
     for (const name of Object.keys(sections))
       renderSection(name, structuredClone(state.data.settings[sourceSection(name)]));
@@ -62,6 +128,8 @@
             ? "分别设置提示词审核和生成图片审核，使用 MaiBot 配置的审核模型。切换分类保留草稿。"
           : name === "access"
             ? "分别设置群聊和私聊的访问规则。填写群号、QQ 号或 QQ 官方 OpenID，无需会话哈希；保存后对新的命令、AI 工具和指定会话的任务生效。"
+          : name === "persona"
+            ? "本人出镜自动使用参考图。请选择支持图生图及对应源图数量的模型；风景、物品和其他人物照照常处理。"
           : "切换分类会保留草稿，点击右下角“保存全部设置”统一保存。";
       for (const tab of document.querySelectorAll("[data-section]")) {
         const active = tab.dataset.section === name;
@@ -122,10 +190,10 @@
     });
     form.onsubmit = (event) => {
       event.preventDefault();
-      if (form.inert || requiresRefresh) return;
+      if (form.inert || requiresRefresh || referenceBusy) return;
       buttonAction(save, async () => {
         const all = {
-          general: { ...state.data.settings.general, ...readers.general(), ...readers.review(), ...readers.access() },
+          general: { ...state.data.settings.general, ...readers.general(), ...readers.persona(), ...readers.review(), ...readers.access() },
           style: readers.style(),
         };
         form.inert = true;
